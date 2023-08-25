@@ -30,11 +30,7 @@ use bsp::hal::{pac, sio::Sio};
 unsafe fn RTC_IRQ() {
     info!("RTC IRQ!");
     let rtc = pac::Peripherals::steal().RTC;
-    rtc.irq_setup_0.modify(|_, s| s.match_ena().clear_bit());
-
-    while rtc.irq_setup_0.read().match_active().bit() {
-        core::hint::spin_loop();
-    }
+    rtc.inte.modify(|_, w| w.rtc().clear_bit());
 }
 
 #[entry]
@@ -96,15 +92,15 @@ fn main() -> ! {
     };
     let mut rtc =
         RealTimeClock::new(pac.RTC, clocks.rtc_clock, &mut pac.RESETS, initial_date).unwrap();
-    // wake in 5 seconds
-    rtc.schedule_alarm(DateTimeFilter::default().second(5));
+
+    rtc.disable_alarm();
     // this is missing from the RTC driver
     unsafe {
-        pac::Peripherals::steal()
-            .RTC
-            .inte
-            .modify(|_, w| w.rtc().set_bit());
+        let rtc_reg = pac::Peripherals::steal().RTC;
+        rtc_reg.inte.modify(|_, w| w.rtc().set_bit());
     }
+    // wake in 5 seconds
+    rtc.schedule_alarm(DateTimeFilter::default().second(5));
     unsafe {
         pac::NVIC::unmask(pac::Interrupt::RTC_IRQ);
     }
@@ -117,6 +113,7 @@ fn main() -> ! {
     // Enter deep sleep for 4more seconds.
     cortex_m::asm::wfi();
     let _ = led.set_high();
+    pac::NVIC::mask(pac::Interrupt::RTC_IRQ);
 
     // invoke dormant mode
     cortex_m::asm::delay(external_xtal_freq_hz.to_Hz());
