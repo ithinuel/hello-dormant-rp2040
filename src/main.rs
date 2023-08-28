@@ -119,12 +119,8 @@ fn main() -> ! {
     // invoke dormant mode
     cortex_m::asm::delay(external_xtal_freq_hz.to_Hz() / 2);
     info!("going dormant at: {}", rtc.now().unwrap().second);
-    let _pin = pins.gpio0.into_pull_down_input();
-    // TODO: allow for this to be enabled on the GPIO.
-    unsafe {
-        let pac = pac::Peripherals::steal();
-        pac.IO_BANK0.dormant_wake_inte[0].modify(|_, w| w.gpio0_edge_high().set_bit());
-    }
+    let pin = pins.gpio0.into_pull_down_input();
+    pin.set_dormant_wake_enabled(bsp::hal::gpio::Interrupt::EdgeHigh, true);
     let _ = led.set_low();
     unsafe {
         xosc.dormant();
