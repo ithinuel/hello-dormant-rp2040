@@ -51,9 +51,11 @@ fn main() -> ! {
     let external_xtal_freq_hz = 12_000_000u32.Hz();
 
     // enable RTC in sleep. This is not yet supported in the clock manager.
-    pac.CLOCKS
-        .sleep_en0
-        .modify(|_, w| w.clk_sys_rtc().set_bit());
+    unsafe {
+        pac.CLOCKS
+            .sleep_en0
+            .write_with_zero(|w| w.clk_rtc_rtc().set_bit());
+    }
     let mut clocks = ClocksManager::new(pac.CLOCKS);
     // we boot on rosc
     // stabilize xosc
