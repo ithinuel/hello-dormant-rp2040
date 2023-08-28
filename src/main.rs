@@ -60,9 +60,8 @@ fn main() -> ! {
     // we boot on rosc
     // stabilize xosc
     let xosc = bsp::hal::xosc::setup_xosc_blocking(pac.XOSC, external_xtal_freq_hz).unwrap();
-    let rosc = bsp::hal::rosc::RingOscillator::new(pac.ROSC).initialize();
+
     // use xosc at 12MHz for clk_ref -> clk_sys -> clk_peri
-    //
     clocks
         .reference_clock
         .configure_clock(&xosc, external_xtal_freq_hz)
@@ -76,7 +75,7 @@ fn main() -> ! {
         .configure_clock(&clocks.system_clock, external_xtal_freq_hz)
         .unwrap();
     // use xosc at 12MHz/256 for clk_rtc
-    clocks.rtc_clock.configure_clock(&rosc, 46875.Hz()).unwrap();
+    clocks.rtc_clock.configure_clock(&xosc, 46875.Hz()).unwrap();
 
     // see ARMv6-M Architectural Reference Manual chapter B3.2.7, table B3-9.
     unsafe {
@@ -102,13 +101,13 @@ fn main() -> ! {
         rtc_reg.inte.modify(|_, w| w.rtc().set_bit());
     }
     // wake in 5 seconds
-    rtc.schedule_alarm(DateTimeFilter::default().second(5));
+    rtc.schedule_alarm(DateTimeFilter::default().second(3));
     unsafe {
         pac::NVIC::unmask(pac::Interrupt::RTC_IRQ);
     }
 
     // wait 1 second
-    cortex_m::asm::delay(external_xtal_freq_hz.to_Hz());
+    cortex_m::asm::delay(external_xtal_freq_hz.to_Hz() / 2);
     info!("going to deep sleep at: {}", rtc.now().unwrap().second);
     let _ = led.set_low();
 
@@ -116,11 +115,17 @@ fn main() -> ! {
     cortex_m::asm::wfi();
     let _ = led.set_high();
     pac::NVIC::mask(pac::Interrupt::RTC_IRQ);
+    rtc.disable_alarm();
 
     // invoke dormant mode
-    cortex_m::asm::delay(external_xtal_freq_hz.to_Hz());
-    rtc.schedule_alarm(DateTimeFilter::default().second(10));
+    cortex_m::asm::delay(external_xtal_freq_hz.to_Hz() / 2);
     info!("going dormant at: {}", rtc.now().unwrap().second);
+    let _pin = pins.gpio0.into_pull_down_input();
+    // TODO: allow for this to be enabled on the GPIO.
+    unsafe {
+        let pac = pac::Peripherals::steal();
+        pac.IO_BANK0.dormant_wake_inte[0].modify(|_, w| w.gpio0_edge_high().set_bit());
+    }
     let _ = led.set_low();
     unsafe {
         xosc.dormant();
