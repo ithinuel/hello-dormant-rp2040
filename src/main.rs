@@ -37,7 +37,8 @@ unsafe fn RTC_IRQ() {
 fn main() -> ! {
     info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
+    let mut core = pac::CorePeripherals::take().unwrap();
+
     let sio = Sio::new(pac.SIO);
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -78,9 +79,7 @@ fn main() -> ! {
     clocks.rtc_clock.configure_clock(&xosc, 46875.Hz()).unwrap();
 
     // see ARMv6-M Architectural Reference Manual chapter B3.2.7, table B3-9.
-    unsafe {
-        core.SCB.scr.modify(|w| w | 0x4);
-    };
+    core.SCB.set_sleepdeep();
 
     let initial_date = DateTime {
         year: 0,
